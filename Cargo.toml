@@ -1,0 +1,10 @@
+
+[workspace]
+
+members = [
+	"radish-cli",
+	"radish-server",
+	"radish-database",
+	"radish-types",
+]
+

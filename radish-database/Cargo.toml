@@ -1,0 +1,26 @@
+[package]
+name = "radish-database"
+version = "0.1.0"
+authors = ["Dmitry Shatilov <shatilov.diman@gmail.com>"]
+license = "AGPL-3.0-or-later"
+edition = "2018"
+repository = "https://github.com/shatilov-diman/radish"
+keywords = ["database", "in-memory", "nosql"]
+categories = ["database-implementations", "algorithms"]
+description = """
+Radish is in-memory data structure store
+"""
+
+[badges]
+appveyor = { repository = "https://github.com/shatilov-diman/radish", branch = "master", service = "github" }
+
+[dependencies]
+radish-types = { version = "0", path = "../radish-types" }
+num = "0"
+log = "0"
+rand = "0"
+regex = "0"
+rmp-serde = "0"
+indexmap = "1"
+tokio = { version = "0.2", features = ["full"] }
+

@@ -1,0 +1,21 @@
+[package]
+name = "radish-cli"
+version = "0.1.0"
+authors = ["Dmitry Shatilov <shatilov.diman@gmail.com>"]
+license = "AGPL-3.0-or-later"
+edition = "2018"
+repository = "https://github.com/shatilov-diman/radish"
+keywords = ["database", "in-memory", "nosql"]
+categories = ["database-implementations", "algorithms"]
+description = """
+Command Line Interface for interact with Radish Database
+"""
+
+[badges]
+appveyor = { repository = "https://github.com/shatilov-diman/radish", branch = "master", service = "github" }
+
+[dependencies]
+radish-types = { version = "0", path = "../radish-types" }
+rmp-serde = "0"
+tokio = { version = "0.2", features = ["full"] }
+
