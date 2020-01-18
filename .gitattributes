@@ -1,0 +1,9 @@
+
+* text=auto
+
+*.toml text
+*.rs text
+
+*.cpp text
+*.h text
+
