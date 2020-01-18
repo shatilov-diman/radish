@@ -76,7 +76,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 async fn request(sock: &mut TcpStream, cmd: Command) -> Result<Value> {
 	let buf = rmp_serde::to_vec(&cmd)?;
-	println!("{:?}", buf);
+	log::debug!("{:?}", buf);
 	let len = u16::try_from(buf.len())?;
 	sock.write_u16(len).await?;
 	sock.write_all(&buf[..]).await?;
@@ -84,13 +84,15 @@ async fn request(sock: &mut TcpStream, cmd: Command) -> Result<Value> {
 	let len = sock.read_u16().await?;
 	let mut buf = vec![0; len as usize];
 	sock.read_exact(&mut buf[..]).await?;
-	println!("{:?}", buf);
+	log::debug!("{:?}", buf);
 
 	Ok(rmp_serde::from_read_ref(&buf)?)
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
+	env_logger::init();
+
 	let addr = "127.0.0.1:6142";
 	let args: Vec<String> = std::env::args().collect();
 
