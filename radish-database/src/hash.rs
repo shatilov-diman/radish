@@ -243,9 +243,8 @@ impl super::Storage {
 
 		self.hash_lock(key, |hash| -> ExecResult {
 			let end = start + max_check;
-			let mut next = start;
+			let mut next = end;
 			for i in start..end {
-				next = i;
 				if let Some((k, _)) = hash.get_index(i) {
 					if let Some(pattern) = &pattern {
 						match k {

@@ -392,13 +392,15 @@ impl super::Storage {
 		let mut keys = vec![];
 
 		let end = start + max_check;
-		let mut next = start;
+		let mut next = end;
 		for i in start..end {
-			next = i;
 			if let Some((key, container)) = containers.get_index(i) {
 				if let Some(key_type) = &key_type {
 					match container.try_lock() {
-						Err(_) => break,
+						Err(_) => {
+							next = i;
+							break
+						},
 						Ok(container) => {
 							let t = Self::type_to_string(&container);
 							if key_type != t {

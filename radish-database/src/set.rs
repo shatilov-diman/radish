@@ -323,9 +323,8 @@ impl super::Storage {
 
 		self.set_lock(key, |set| -> ExecResult {
 			let end = start + max_check;
-			let mut next = start;
+			let mut next = end;
 			for i in start..end {
-				next = i;
 				if let Some(value) = set.get_index(i) {
 					if let Some(pattern) = &pattern {
 						match value {
