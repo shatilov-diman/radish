@@ -25,7 +25,7 @@ use radish_database::Storage;
 
 async fn command_loop_executor(conn_name: &str, mut sock: TcpStream, mut storage: Storage) -> Result<(), String> {
 	loop {
-		let len = sock.read_u16().await.map_err(|_|"Failed to read frame size".to_owned())?;
+		let len = sock.read_u32().await.map_err(|_|"Failed to read frame size".to_owned())?;
 		let mut buf = vec![0; len as usize];
 		sock.read_exact(&mut buf[..]).await.map_err(|_|"Failed to read command".to_owned())?;
 
@@ -35,8 +35,8 @@ async fn command_loop_executor(conn_name: &str, mut sock: TcpStream, mut storage
 		log::debug!("{}: {}", conn_name, result);
 
 		let buf = rmp_serde::to_vec(&result).map_err(|_|"Failed to serialize result".to_owned())?;
-		let len = u16::try_from(buf.len()).map_err(|_|"Length of result is too big".to_owned())?;
-		sock.write_u16(len).await.map_err(|_|"Failed to write frame size".to_owned())?;
+		let len = u32::try_from(buf.len()).map_err(|_|"Length of result is too big".to_owned())?;
+		sock.write_u32(len).await.map_err(|_|"Failed to write frame size".to_owned())?;
 		sock.write_all(&buf[..]).await.map_err(|_|"Failed to write result".to_owned())?;
 	}
 }

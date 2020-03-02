@@ -77,11 +77,11 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 async fn request(sock: &mut TcpStream, cmd: Command) -> Result<Value> {
 	let buf = rmp_serde::to_vec(&cmd)?;
 	log::debug!("{:?}", buf);
-	let len = u16::try_from(buf.len())?;
-	sock.write_u16(len).await?;
+	let len = u32::try_from(buf.len())?;
+	sock.write_u32(len).await?;
 	sock.write_all(&buf[..]).await?;
 
-	let len = sock.read_u16().await?;
+	let len = sock.read_u32().await?;
 	let mut buf = vec![0; len as usize];
 	sock.read_exact(&mut buf[..]).await?;
 	log::debug!("{:?}", buf);
