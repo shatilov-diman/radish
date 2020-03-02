@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::time::{SystemTime, Duration};
 
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use super::container::Container;
 use super::container::ContainerPtr;
@@ -28,9 +28,14 @@ type Value = super::Value;
 type Arguments = super::Arguments;
 type ExecResult = super::ExecResult;
 
+enum RwAction<'a, T> {
+	WriteLock(&'a RwLock<T>),
+	ReadLock(&'a RwLock<T>),
+}
+
 impl super::Storage {
 	pub fn make_container(cnt: Container) -> ContainerPtr {
-		Arc::new(Mutex::new(cnt))
+		Arc::new(RwLock::new(cnt))
 	}
 	pub fn make_container_with<F: FnMut() -> Container>(mut factory: F) -> ContainerPtr {
 		Self::make_container(factory())
@@ -87,32 +92,36 @@ impl super::Storage {
 		.collect()
 	}
 
-	pub async fn lock_all<'a, T: 'a>(mut writes: impl Iterator<Item=&'a Mutex<T>>, mut reads: impl Iterator<Item=Option<&'a Mutex<T>>>) -> (Vec<MutexGuard<'a, T>>, Vec<Option<MutexGuard<'a, T>>>) {
-		let mut mutexes = BTreeMap::<u64, &'a Mutex<T>>::new();
-		let mut guards = HashMap::<u64, MutexGuard<'a, T>>::new();
+	pub async fn lock_all<'a, T: 'a>(mut writes: impl Iterator<Item=&'a RwLock<T>>, mut reads: impl Iterator<Item=Option<&'a RwLock<T>>>) -> (Vec<RwLockWriteGuard<'a, T>>, Vec<Option<RwLockReadGuard<'a, T>>>) {
+		let mut locks = BTreeMap::<u64, RwAction<'a, T>>::new();
+		let mut guard_writes = HashMap::<u64, RwLockWriteGuard<'a, T>>::new();
+		let mut guard_reads = HashMap::<u64, RwLockReadGuard<'a, T>>::new();
 		let mut output_order_writes = Vec::<u64>::new();
 		let mut output_order_reads = Vec::<u64>::new();
-		while let Some(m) = writes.next() {
-			let address = m as *const Mutex<T> as u64;
-			mutexes.insert(address, m);
+		while let Some(w) = writes.next() {
+			let address = w as *const RwLock<T> as u64;
+			locks.insert(address, RwAction::<'a, T>::WriteLock(w));
 			output_order_writes.push(address);
 		}
 		while let Some(m) = reads.next() {
 			match m {
 				None => output_order_reads.push(0),
-				Some(m) => {
-					let address = m as *const Mutex<T> as u64;
-					mutexes.insert(address, m);
+				Some(w) => {
+					let address = w as *const RwLock<T> as u64;
+					locks.insert(address, RwAction::<'a, T>::ReadLock(w));
 					output_order_reads.push(address);
 				},
 			}
 		}
-		for (address, m) in mutexes {
-			guards.insert(address, m.lock().await);
+		for (address, l) in locks {
+			match l {
+				RwAction::<'a, T>::WriteLock(l) => {guard_writes.insert(address, l.write().await);},
+				RwAction::<'a, T>::ReadLock(l) => {guard_reads.insert(address, l.read().await);},
+			}
 		}
 		let writes = output_order_writes
 			.iter()
-			.map(|a|guards.remove(a).unwrap())
+			.map(|a|guard_writes.remove(a).unwrap())
 			.collect()
 		;
 		let reads = output_order_reads
@@ -120,7 +129,7 @@ impl super::Storage {
 			.map(|a|{
 				match a {
 					0 => None,
-					a => Some(guards.remove(a).unwrap()),
+					a => Some(guard_reads.remove(a).unwrap()),
 				}
 			})
 			.collect()
@@ -184,7 +193,7 @@ impl super::Storage {
 	}
 
 	async fn key_expiration(&self, cnt: &ContainerPtr) -> Option<std::time::SystemTime> {
-		let cnt = cnt.lock().await;
+		let cnt = cnt.read().await;
 		match &*cnt {
 			Container::Set(c) => c.expiration_time,
 			Container::List(c) => c.expiration_time,
@@ -236,7 +245,7 @@ impl super::Storage {
 			let ktype = match c {
 				None => Value::Nill,
 				Some(c) => {
-					let c = c.lock().await;
+					let c = c.read().await;
 					let t = Self::type_to_string(&c);
 					Value::Buffer(Vec::from(t.as_bytes()))
 				}
@@ -274,7 +283,7 @@ impl super::Storage {
 		match self.try_get_container(&key).await {
 			None => Ok(Value::Integer(-2)),
 			Some(c) => {
-				let c = c.lock().await;
+				let c = c.read().await;
 				match Self::get_expiration_time(&*c) {
 					None => Ok(Value::Integer(-1)),
 					Some(tm) => {
@@ -299,7 +308,7 @@ impl super::Storage {
 		match c {
 			None => Ok(Value::Bool(false)),
 			Some(c) => {
-				let mut c = c.lock().await;
+				let mut c = c.write().await;
 				Self::set_expiration_time(&mut *c, Some(timepoint));
 				drop(c);
 				self.expire_key_at(&key, timepoint).await;
@@ -348,7 +357,7 @@ impl super::Storage {
 
 		for key in expired {
 			if let Some(c) = self.try_get_container(&key).await {
-				let c = c.lock().await;
+				let c = c.read().await;
 				let tm = Self::get_expiration_time(&*c);
 				log::debug!("{:?}: {:?} vs {:?}", key, tm, now);
 				match tm {
@@ -401,17 +410,10 @@ impl super::Storage {
 		for i in start..end {
 			if let Some((key, container)) = containers.get_index(i) {
 				if let Some(key_type) = &key_type {
-					match container.try_lock() {
-						Err(_) => {
-							next = i;
-							break
-						},
-						Ok(container) => {
-							let t = Self::type_to_string(&container);
-							if key_type != t {
-								continue;
-							}
-						}
+					let container = container.read().await;
+					let t = Self::type_to_string(&container);
+					if key_type != t {
+						continue;
 					}
 				}
 				if let Some(pattern) = &pattern {

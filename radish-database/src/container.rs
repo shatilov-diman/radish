@@ -17,7 +17,7 @@
 use std::sync::Arc;
 use std::collections::VecDeque;
 
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::RwLock;
 use indexmap::{IndexSet, IndexMap};
 
 type Key = super::Key;
@@ -44,7 +44,7 @@ pub enum Container {
 	Hash(ContainerImpl<IndexMap<Value, Value>>),
 	Strings(ContainerImpl<Vec<u8>>),
 }
-pub type ContainerPtr = Arc<Mutex<Container>>;
+pub type ContainerPtr = Arc<RwLock<Container>>;
 pub type Containers = IndexMap<Key, ContainerPtr>;
 pub type ContainersPtr = Arc<RwLock<Containers>>;
 
