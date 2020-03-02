@@ -181,7 +181,7 @@ impl super::Storage {
 		}
 		let cnt = Self::make_container(Container::Strings(cnt));
 
-		let mut containers = self.containers.lock().await;
+		let mut containers = self.containers.write().await;
 		let entry = containers.entry(key.clone());
 		let result = match (set_if_exists, entry) {
 			(None, Entry::Vacant(e)) | (Some(false), Entry::Vacant(e)) => {
@@ -240,7 +240,7 @@ impl super::Storage {
 		cnt.expiration_time = None;
 		let cnt = Self::make_container(Container::Strings(cnt));
 
-		let mut containers = self.containers.lock().await;
+		let mut containers = self.containers.write().await;
 		match containers.entry(key.clone()) {
 			Entry::Occupied(_) => Ok(Value::Bool(false)),
 			Entry::Vacant(e) => {

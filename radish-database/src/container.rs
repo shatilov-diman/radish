@@ -17,7 +17,7 @@
 use std::sync::Arc;
 use std::collections::VecDeque;
 
-use tokio::sync::Mutex;
+use tokio::sync::{RwLock, Mutex};
 use indexmap::{IndexSet, IndexMap};
 
 type Key = super::Key;
@@ -46,7 +46,7 @@ pub enum Container {
 }
 pub type ContainerPtr = Arc<Mutex<Container>>;
 pub type Containers = IndexMap<Key, ContainerPtr>;
-pub type ContainersPtr = Arc<Mutex<Containers>>;
+pub type ContainersPtr = Arc<RwLock<Containers>>;
 
 
 impl super::Storage {

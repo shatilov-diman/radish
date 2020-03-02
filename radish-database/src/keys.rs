@@ -37,22 +37,27 @@ impl super::Storage {
 	}
 
 	pub async fn try_get_container(&self, key: &Key) -> Option<ContainerPtr> {
-		let containers = self.containers.lock().await;
+		let containers = self.containers.read().await;
 		containers
 		.get(key)
 		.cloned()
 	}
 
 	pub async fn get_container<F: FnMut() -> Container>(&self, key: Key, factory: F) -> ContainerPtr {
-		let mut containers = self.containers.lock().await;
-		containers
-		.entry(key.clone())
-		.or_insert_with(||Self::make_container_with(factory))
-		.clone()
+		match self.try_get_container(&key).await {
+			Some(c) => c,
+			None => {
+				let mut containers = self.containers.write().await;
+				containers
+				.entry(key.clone())
+				.or_insert_with(||Self::make_container_with(factory))
+				.clone()
+			}
+		}
 	}
 
 	pub async fn try_get_containers(&self, keys: &Vec<Key>) -> Vec<Option<ContainerPtr>> {
-		let containers = self.containers.lock().await;
+		let containers = self.containers.read().await;
 
 		keys
 		.iter()
@@ -66,7 +71,7 @@ impl super::Storage {
 	}
 
 	pub async fn get_containers<F: FnMut() -> Container>(&self, mut keys: Vec<Key>, mut factory: F) -> Vec<ContainerPtr> {
-		let mut containers = self.containers.lock().await;
+		let mut containers = self.containers.write().await;
 
 		keys
 		.drain(..)
@@ -131,7 +136,7 @@ impl super::Storage {
 			pattern.is_match(&key[..])
 		};
 
-		let containers = self.containers.lock().await;
+		let containers = self.containers.read().await;
 
 		Ok(Value::Array(
 			containers
@@ -143,7 +148,7 @@ impl super::Storage {
 	}
 
 	pub async fn keys_exists(&self, mut args: Arguments) -> ExecResult {
-		let containers = self.containers.lock().await;
+		let containers = self.containers.read().await;
 
 		let mut exists_count = 0;
 		while let Ok(key) = Self::extract_key(args.pop_front()) {
@@ -167,7 +172,7 @@ impl super::Storage {
 	}
 
 	pub async fn keys_del(&self, mut args: Arguments) -> ExecResult {
-		let mut containers = self.containers.lock().await;
+		let mut containers = self.containers.write().await;
 
 		let mut removed_count = 0;
 		while let Ok(key) = Self::extract_key(args.pop_front()) {
@@ -192,7 +197,7 @@ impl super::Storage {
 		let key = Self::extract_key(args.pop_front())?;
 		let newkey = Self::extract_key(args.pop_front())?;
 
-		let mut containers = self.containers.lock().await;
+		let mut containers = self.containers.write().await;
 		let cnt = containers.remove(&key).ok_or_else(||format!("key '{:?}' not found", &key[..]))?;
 		let timepoint = self.key_expiration(&cnt).await;
 		containers.insert(newkey.clone(), cnt);
@@ -352,7 +357,7 @@ impl super::Storage {
 							log::warn!("{:?}: will removed at {:?}", key, time);
 						} else {
 							log::debug!("{:?}: expired and removed", key);
-							let mut containers = self.containers.lock().await;
+							let mut containers = self.containers.write().await;
 							containers.remove(&key);
 						}
 					},
@@ -387,7 +392,7 @@ impl super::Storage {
 			Some(pattern) => Some(regex::bytes::Regex::new(&pattern[..]).map_err(|e|format!("{}", e))?),
 		};
 
-		let containers = self.containers.lock().await;
+		let containers = self.containers.read().await;
 
 		let mut keys = vec![];
 
