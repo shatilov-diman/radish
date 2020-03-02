@@ -16,6 +16,7 @@
 
 mod container;
 mod strings;
+mod system;
 mod expire;
 mod list;
 mod keys;
@@ -165,7 +166,10 @@ impl Storage {
 			"HMSET" => self.hash_set(command.arguments).await,
 			"HSCAN" => self.hash_scan(command.arguments).await,
 
-			"" => Err(format!("HELP docs.....")),
+			"AUTHORS" => self.authors(command.arguments).await,
+			"VERSION" => self.version(command.arguments).await,
+			"LICENSE" => self.license(command.arguments).await,
+			"HELP" | "" => self.help(command.arguments).await,
 			_ => Err(format!("Unsupported command")),
 		};
 		match result {
