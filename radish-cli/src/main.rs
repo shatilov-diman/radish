@@ -75,15 +75,18 @@ fn value_to_string (v: &Value) -> String {
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 async fn request(sock: &mut TcpStream, cmd: Command) -> Result<Value> {
-	let buf = rmp_serde::to_vec(&cmd)?;
+	let mut buf = rmp_serde::to_vec(&cmd)?;
 	log::debug!("{:?}", buf);
 	let len = u32::try_from(buf.len())?;
-	sock.write_u32(len).await?;
-	sock.write_all(&buf[..]).await?;
+	let mut buf2 = len.to_le_bytes().to_vec();
+	buf2.append(&mut buf);
+	sock.write_all(&buf2[..]).await?;
 
-	let len = sock.read_u32().await?;
+	let mut buf = [0; std::mem::size_of::<u32>()];
+	assert_eq!(std::mem::size_of::<u32>(), sock.read_exact(&mut buf[..]).await?);
+	let len = u32::from_le_bytes(buf);
 	let mut buf = vec![0; len as usize];
-	sock.read_exact(&mut buf[..]).await?;
+	assert_eq!(len as usize, sock.read_exact(&mut buf[..]).await?);
 	log::debug!("{:?}", buf);
 
 	Ok(rmp_serde::from_read_ref(&buf)?)
