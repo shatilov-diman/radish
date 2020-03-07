@@ -109,9 +109,11 @@ async fn main() -> Result<()> {
 		let mut lines = BufReader::new(tokio::io::stdin()).lines();
 		while let Ok(Some(line)) = lines.next_line().await {
 			let args: Vec<String> = line.split(" ").map(|i|i.trim().to_owned()).filter(|s|!s.is_empty()).collect();
-			let cmd = new_command(&args[0], &args[1..]);
-			let result = request(&mut sock, cmd).await?;
-			println!("{}", value_to_string(&result));
+			if args.len() > 0 {
+				let cmd = new_command(&args[0], &args[1..]);
+				let result = request(&mut sock, cmd).await?;
+				println!("{}", value_to_string(&result));
+			}
 		}
 	}
 
