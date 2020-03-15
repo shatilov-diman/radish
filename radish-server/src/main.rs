@@ -14,33 +14,38 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::convert::TryFrom;
 use std::time::{SystemTime, Duration};
 
 use tokio::net::{TcpListener, TcpStream};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{BufReader, AsyncReadExt, AsyncWriteExt};
 
 use radish_types::*;
 use radish_database::Storage;
 
+const U32_SIZE: usize = std::mem::size_of::<u32>();
+
 async fn command_loop_executor(conn_name: &str, mut sock: TcpStream, mut storage: Storage) -> Result<(), String> {
+	let (reader, mut writer) = sock.split();
+	let mut reader = BufReader::new(reader);
+	let mut buf = Vec::with_capacity(1024);
 	loop {
-		let mut buf = [0; std::mem::size_of::<u32>()];
-		assert_eq!(std::mem::size_of::<u32>(), sock.read_exact(&mut buf[..]).await.map_err(|_|"Failed to read frame size".to_owned())?);
-		let len = u32::from_le_bytes(buf);
-		let mut buf = vec![0; len as usize];
-		assert_eq!(len as usize, sock.read_exact(&mut buf[..]).await.map_err(|_|"Failed to read command".to_owned())?);
+		let mut lenbuf = [0; U32_SIZE];
+		assert_eq!(U32_SIZE, reader.read_exact(&mut lenbuf[..]).await.map_err(|_|"Failed to read frame size".to_owned())?);
+		let len = u32::from_le_bytes(lenbuf) as usize;
+		buf.resize(len, 0);
+		assert_eq!(len, reader.read_exact(&mut buf[..]).await.map_err(|_|"Failed to read command".to_owned())?);
 
 		let cmd: Command = rmp_serde::from_read_ref(&buf).map_err(|_|"Failed to deserialize command".to_owned())?;
 		log::debug!("{}: {}", conn_name, cmd);
 		let result = storage.execute(cmd).await;
 		log::debug!("{}: {}", conn_name, result);
 
-		let mut buf = rmp_serde::to_vec(&result).map_err(|_|"Failed to serialize result".to_owned())?;
-		let len = u32::try_from(buf.len()).map_err(|_|"Length of result is too big".to_owned())?;
-		let mut buf2 = len.to_le_bytes().to_vec();
-		buf2.append(&mut buf);
-		sock.write_all(&buf2[..]).await.map_err(|_|"Failed to write result".to_owned())?;
+		buf.resize(U32_SIZE, 0);
+		rmp_serde::encode::write(&mut buf, &result).map_err(|_|"Failed to serialize result".to_owned())?;
+		assert!(buf.len() >= U32_SIZE);
+		let len = (buf.len()-U32_SIZE) as u32;
+		buf[0..U32_SIZE].copy_from_slice(&len.to_le_bytes()[..]);
+		writer.write_all(&buf[..]).await.map_err(|_|"Failed to write result".to_owned())?;
 	}
 }
 
