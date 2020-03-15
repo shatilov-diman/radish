@@ -50,13 +50,13 @@ impl super::Storage {
 	}
 	async fn set_lock<F: FnOnce(&Inner) -> ExecResult>(&self, key: Key, processor: F) -> ExecResult {
 		let c1 = self.set_get_container(key).await;
-		let c2 = c1.lock().await;
+		let c2 = c1.read().await;
 		let c3 = Self::set_unwrap_container(&c2).await?;
 		processor(&c3.inner)
 	}
 	async fn set_lock_mut<F: FnOnce(&mut Inner) -> ExecResult>(&self, key: Key, processor: F) -> ExecResult {
 		let c1 = self.set_get_container(key).await;
-		let mut c2 = c1.lock().await;
+		let mut c2 = c1.write().await;
 		let c3 = Self::set_unwrap_mut_container(&mut c2).await?;
 		processor(&mut c3.inner)
 	}

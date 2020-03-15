@@ -93,13 +93,13 @@ impl super::Storage {
 	}
 	async fn strings_lock<F: FnOnce(&Inner) -> ExecResult>(&self, key: Key, processor: F) -> ExecResult {
 		let c1 = self.strings_get_container(key).await;
-		let c2 = c1.lock().await;
+		let c2 = c1.read().await;
 		let c3 = Self::strings_unwrap_container(&c2)?;
 		processor(&c3.inner)
 	}
 	async fn strings_lock_mut<F: FnOnce(&mut Inner) -> ExecResult>(&self, key: Key, processor: F) -> ExecResult {
 		let c1 = self.strings_get_container(key).await;
-		let mut c2 = c1.lock().await;
+		let mut c2 = c1.write().await;
 		let c3 = Self::strings_unwrap_mut_container(&mut c2)?;
 		processor(&mut c3.inner)
 	}
@@ -181,7 +181,7 @@ impl super::Storage {
 		}
 		let cnt = Self::make_container(Container::Strings(cnt));
 
-		let mut containers = self.containers.lock().await;
+		let mut containers = self.containers.write().await;
 		let entry = containers.entry(key.clone());
 		let result = match (set_if_exists, entry) {
 			(None, Entry::Vacant(e)) | (Some(false), Entry::Vacant(e)) => {
@@ -204,7 +204,7 @@ impl super::Storage {
 
 	pub async fn strings_setex_impl(&mut self, key: Key, timepoint: SystemTime, value: Vec<u8>) -> ExecResult {
 		let cnt = self.strings_get_container(key.clone()).await;
-		let mut cnt = cnt.lock().await;
+		let mut cnt = cnt.write().await;
 		let mut cnt = Self::strings_unwrap_mut_container(&mut cnt)?;
 
 		cnt.inner = value;
@@ -240,7 +240,7 @@ impl super::Storage {
 		cnt.expiration_time = None;
 		let cnt = Self::make_container(Container::Strings(cnt));
 
-		let mut containers = self.containers.lock().await;
+		let mut containers = self.containers.write().await;
 		match containers.entry(key.clone()) {
 			Entry::Occupied(_) => Ok(Value::Bool(false)),
 			Entry::Vacant(e) => {

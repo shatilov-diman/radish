@@ -26,7 +26,7 @@ mod set;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use tokio::sync::Mutex;
+use tokio::sync::{RwLock, Mutex};
 use indexmap::IndexMap;
 
 use container::ContainersPtr;
@@ -47,7 +47,7 @@ pub struct Storage {
 impl Storage {
 	pub fn new() -> Self {
 		Self {
-			containers: Arc::new(Mutex::new(IndexMap::new())),
+			containers: Arc::new(RwLock::new(IndexMap::new())),
 			expire_controller: Arc::new(Mutex::new(expire::ExpireController::new())),
 			expire_awaker: Arc::new(Mutex::new(None)),
 		}
